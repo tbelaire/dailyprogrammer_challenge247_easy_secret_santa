@@ -46,12 +46,14 @@ impl Debug for Family {
     }
 }
 
+// *******************************************************************
 fn main() {
-    let path = Path::new("input/input2.txt");
+    let path = Path::new("input/test2.txt");
     if let Ok(assignment) = work(&path) {
         print_list(&assignment);
     } else {
-        println!("There was an error");
+        println!("There was an error.");
+        // Soo much better than panicing.... ;)
     }
 }
 
@@ -68,6 +70,7 @@ fn work(path: &Path) -> Result<Vec<String>, Box<std::error::Error>> {
         let family: Vec<_>= l.split(' ').map(|s|{s.to_string()}).collect();
         num_people += family.len();
         assert!(family.len() > 0);
+        // false as we haven't selected a first family yet.
         people.push(Family(family, false));
     }
 
