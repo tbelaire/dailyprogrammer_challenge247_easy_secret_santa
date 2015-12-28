@@ -1,0 +1,6 @@
+[package]
+name = "challenge_247_easy_secret_santa"
+version = "0.1.0"
+authors = ["Theo Belaire <theo.belaire@gmail.com>"]
+
+[dependencies]
