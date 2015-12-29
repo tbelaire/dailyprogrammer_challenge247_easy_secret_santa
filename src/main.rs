@@ -104,7 +104,10 @@ fn find_assignment(people: Vec<Family>) -> Option<Vec<String>> {
                                .expect("At least one person in each family"));
 
     while let Some(mut next_family) = heap.pop() {
-        assignment.push(next_family.people.pop().expect("Somehow an empty family is in the heap"));
+        assignment.push(next_family.people
+                                   .pop()
+                                   .expect("Somehow an empty family is in \
+                                            the heap"));
 
         if last_family.people.len() > 0 {
             heap.push(last_family);
