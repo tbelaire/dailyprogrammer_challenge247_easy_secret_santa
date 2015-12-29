@@ -1,38 +1,26 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::error::Error;
-use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
 
 
-// Le sigh, not stable...
-// #[derive(Debug, Eq, PartialEq)]
-struct Family(Vec<String>, bool);
-impl Family {
-    /// This is twice the len, +1 if you were first.
-    fn weight(&self) -> usize {
-        let l = self.0.len() * 2;
-        if self.1 {
-            l + 1
-        } else {
-            l
-        }
-    }
+#[derive(Debug, Eq, PartialEq)]
+struct Family {
+    people: Vec<String>,
+    first: bool,
 }
 
-impl PartialEq for Family {
-    fn eq(&self, b: &Family) -> bool {
-        self.0.eq(&b.0)
-    }
-}
-impl Eq for Family {}
-// Sort familys by size.
+// Sort familys by size, then tiebreak so that the *first* family has
+// a larger size, to avoid being both first and last.
 impl Ord for Family {
     fn cmp(&self, b: &Family) -> Ordering {
-        self.weight().cmp(&b.weight())
+        match self.people.cmp(&b.people) {
+            Ordering::Equal => self.first.cmp(&b.first),
+            other => other,
+        }
     }
 }
 impl PartialOrd for Family {
@@ -40,79 +28,111 @@ impl PartialOrd for Family {
         Some(self.cmp(b))
     }
 }
-impl Debug for Family {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        self.0.fmt(fmt)
-    }
-}
 
 // *******************************************************************
 fn main() {
     let path = Path::new("input/test2.txt");
-    if let Ok(assignment) = work(&path) {
+    let people = match load_family(&path) {
+        Ok(people) => people,
+        Err(error) => {
+            println!("There was an error loading the families: {}",
+                     error.description());
+            return;
+        }
+    };
+
+    if let Some(assignment) = find_assignment(people) {
         print_list(&assignment);
     } else {
-        println!("There was an error.");
-        // Soo much better than panicing.... ;)
+        println!("The list of people had no valid solution");
     }
 }
 
 
-fn work(path: &Path) -> Result<Vec<String>, Box<std::error::Error>> {
-    let file = BufReader::new(
-        try!(File::open(path)));
+fn load_family(path: &Path) -> Result<Vec<Family>, Box<std::error::Error>> {
+    let file = BufReader::new(try!(File::open(path)));
     let mut people: Vec<Family> = vec![];
-    let mut num_people: usize = 0;
 
     for l in file.lines() {
         // Could have an error each time.
         let l = try!(l);
-        let family: Vec<_>= l.split(' ').map(|s|{s.to_string()}).collect();
-        num_people += family.len();
-        assert!(family.len() > 0);
-        // false as we haven't selected a first family yet.
-        people.push(Family(family, false));
-    }
+        let family: Vec<_> = l.split(' ').map(|s| s.to_owned()).collect();
 
-    // The algorithm is as follows:
-    // Make a heap of the familys, and pop the largest off, and remove
-    // a member.
-    // Then, pop off the next largest, remove a person, and push on the previous
-    // one.
+        // Skip blank lines.
+        if family.len() > 0 {
+            // first: false as we haven't selected a first family yet.
+            people.push(Family {
+                people: family,
+                first: false,
+            });
+        }
+    }
+    Ok(people)
+}
+
+// The algorithm is as follows:
+// Make a heap of the families, and pop the largest off, and remove a member.
+// Then, pop off the next largest, remove a person, and push on the previous
+// family.
+// Thus, at each step, we avoid taking from the same family twice in a row,
+// as it hasn't been re-added to the heap yet.  At the same time, this focuses
+// on finding matches for people in the largest families first, to avoid getting
+// backed into a corner later.
+//
+// It's possible that no assignment exists that satisfies all the constraints,
+// in which case this will return None.
+fn find_assignment(people: Vec<Family>) -> Option<Vec<String>> {
+
     let mut heap = BinaryHeap::from(people);
 
-    let mut assignment: Vec<String> = Vec::with_capacity(num_people);
+    let mut assignment: Vec<String> = Vec::new();
     let mut last_family = heap.pop().expect("At least one person required!");
     // These guys were first, do *not* let them be last as well.
-    last_family.1 = true;
+    // This gives them a boost in priority in the heap.
+    last_family.first = true;
 
-    assignment.push(last_family.0.pop().expect("At least one person in each family"));
-    // println!("Assignment is {:?}", assignment);
-    // println!("Heap is {:?}", heap);
+    assignment.push(last_family.people
+                               .pop()
+                               .expect("At least one person in each family"));
 
     while let Some(mut next_family) = heap.pop() {
-        assert!(next_family.0.len() > 0);
-        assignment.push(next_family.0.pop().unwrap());
-        // println!("Assignment is {:?}", assignment);
-        // println!("Heap is {:?}", heap);
+        assert!(next_family.people.len() > 0,
+                "Somehow an empty family is in the heap");
+        assignment.push(next_family.people.pop().unwrap());
 
-        if last_family.0.len() > 0 {
+        if last_family.people.len() > 0 {
             heap.push(last_family);
         }
         last_family = next_family;
     }
-
-
-    // let assignment = people.into_iter().flat_map(|family| {family.0}).collect();
-    return Ok(assignment);
-
+    if last_family.people.len() > 0 {
+        // We failed to assign everyone in this family before we ran out of
+        // other families, so the initial configuration was not feasible.
+        None
+    } else {
+        Some(assignment)
+    }
 }
 
 
-fn print_list(assignment: &Vec<String>) {
-    println!("list is {:?}", assignment);
-    for (giver, receiver) in assignment.iter().zip(
-                             assignment.iter().cycle().skip(1)) {
+fn print_list(assignment: &[String]) {
+    for (giver, receiver) in assignment.iter()
+                                       .zip(assignment.iter().cycle().skip(1)) {
         println!("{} -> {}", giver, receiver);
     }
+}
+
+#[test]
+fn test_infeasible() {
+    let people = vec![Family {
+                          people: vec!["Appa".to_owned(),
+                                       "Alph".to_owned(),
+                                       "Alex".to_owned()],
+                          first: false,
+                      },
+                      Family {
+                          people: vec!["Bob".to_owned()],
+                          first: false,
+                      }];
+    assert_eq!(find_assignment(people), None);
 }
