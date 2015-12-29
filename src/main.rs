@@ -13,8 +13,9 @@ struct Family {
     first: bool,
 }
 
-// Sort familys by size, then tiebreak so that the *first* family has
-// a larger size, to avoid being both first and last.
+// Sort families by size, then break ties so that the family with
+// first set has a fractionally larger size.
+// This avoids a family being both first and last.
 impl Ord for Family {
     fn cmp(&self, b: &Family) -> Ordering {
         match self.people.cmp(&b.people) {
@@ -50,7 +51,8 @@ fn main() {
 
 
 fn load_family(path: &Path) -> Result<Vec<Family>, Box<std::error::Error>> {
-    let file = BufReader::new(try!(File::open(path)));
+    let file = try!(File::open(path));
+    let file = BufReader::new(file);
     let mut people: Vec<Family> = vec![];
 
     for l in file.lines() {
@@ -83,10 +85,16 @@ fn load_family(path: &Path) -> Result<Vec<Family>, Box<std::error::Error>> {
 // in which case this will return None.
 fn find_assignment(people: Vec<Family>) -> Option<Vec<String>> {
 
+    // If we have no people, then just stop.
+    if people.is_empty() {
+        return None;
+    }
+
     let mut heap = BinaryHeap::from(people);
 
     let mut assignment: Vec<String> = Vec::new();
-    let mut last_family = heap.pop().expect("At least one person required!");
+    let mut last_family = heap.pop().unwrap(); // We know there is at least one.
+
     // These guys were first, do *not* let them be last as well.
     // This gives them a boost in priority in the heap.
     last_family.first = true;
@@ -96,9 +104,7 @@ fn find_assignment(people: Vec<Family>) -> Option<Vec<String>> {
                                .expect("At least one person in each family"));
 
     while let Some(mut next_family) = heap.pop() {
-        assert!(next_family.people.len() > 0,
-                "Somehow an empty family is in the heap");
-        assignment.push(next_family.people.pop().unwrap());
+        assignment.push(next_family.people.pop().expect("Somehow an empty family is in the heap"));
 
         if last_family.people.len() > 0 {
             heap.push(last_family);
