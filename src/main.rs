@@ -13,6 +13,26 @@ struct Family {
     first: bool,
 }
 
+impl Family {
+    pub fn new<T>(people: Vec<T>) -> Self
+        where T: Into<String>
+    {
+        Family {
+            people: people.into_iter().map(Into::into).collect(),
+            first: false,
+        }
+    }
+    pub fn new2<V, T>(people: V) -> Self
+        where V: Into<Vec<T>>,
+              T: Into<String>
+    {
+        Family {
+            people: people.into().into_iter().map(Into::into).collect(),
+            first: false,
+        }
+    }
+}
+
 // Sort families by size, then break ties so that the family with
 // first set has a fractionally larger size.
 // This avoids a family being both first and last.
@@ -144,4 +164,16 @@ fn test_infeasible() {
                           first: false,
                       }];
     assert_eq!(find_assignment(people), None);
+}
+
+#[test]
+fn test_family_constructor() {
+    let family1 = Family {
+        people: vec!["Appa".to_owned(), "Alph".to_owned(), "Alex".to_owned()],
+        first: false,
+    };
+    let family2 = Family::new(vec!["Appa", "Alph", "Alex"]);
+    assert_eq!(family1, family2);
+    let family3 = Family::new2(&["Appa", "Alph", "Alex"][..]);
+    assert_eq!(family1, family3);
 }
